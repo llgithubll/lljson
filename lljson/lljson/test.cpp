@@ -11,28 +11,38 @@ int main(int argc, char **argv)
 	return RUN_ALL_TESTS();
 }
 
+
+
+#if 0
 {
-	// use like this
-	Json json();						// Json json("[0, true]"); also support
-	auto type = json.get_type();		// Json::type type = json.get_type();
+	// interface design: version 1
+	Json();
+	Json(bool b);
+	Json(double num);
+	Json(string &str);
+	Json(vector<Json> &v);
+	Json(map<string, Json> &m);
 
+	
+	j = Json(...);
+	
+	j.is_null();
+	j.is_boolean();
+	j.is_number();
+	j.is_string();
+	j.is_array();
+	j.is_object();	
+	
+	b = j.get_boolean();	// if j is boolean	,b is a true or false
+	n = j.get_number();		// if j is number	,n is a double
+	s = j.get_string();		// if j is string	,s is a string
+	a = j.get_array();		// if j is array	,a is a vector<Json>
+	a[i];
+	o = j.get_object();		// if j is object	,o is a map<string, Json>
+	o["key"];
 
-	json.parse(R"({"0":[0, true, "haha"], "1":false})");
-	auto s = json.stringify();			// std::string s = json.stringify();
-
-	auto obj = json;					// Json obj = json;
-	auto o = obj.get_object();			// std::map<string, Json> o = obj.get_object();
-	auto arr = o["0"];					// Json arr = o["0"];
-	auto a = arr.get_array();			// std::vector<Json> a = arr.get_object();
-	auto num = a[0];					// Json num = a[0];
-	auto n = num.get_number();			// double n = num.get_number();	
-	auto boolean = a[1];				// Json boolean = a[1];
-	auto b = boolean.get_boolean();		// bool b = boolean.get_boolean();
-	auto str = a[2];					// Json str = a[2];
-	auto s = str.get_string();			// std::string s = str.get_string();
-
-	auto &o_ref = obj.get_object();		// std::map<string, Json> &o_ref = obj.get_object();
-	o_ref["2"] = Json(R"({"3":4.0})");	// add new Json element into Json object
-	auto s_new = obj.stringify();		// s_new = std::string(R"({"0":[0, true, "haha"], "1":false, "2":{"3":4.0}})");
-
+	j = lljson::parse(str);
+	str = lljson::stringify(j);
 }
+#endif
+
