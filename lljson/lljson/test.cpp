@@ -1,7 +1,36 @@
 #include<iostream>
 #include<gtest\gtest.h>
+#include "lljson.h"
+
+using namespace std;
+using namespace lljson;
 
 namespace {
+
+TEST(ConstructorTest, Constructor) {
+	Json j;
+	EXPECT_TRUE(j.isNull());
+	EXPECT_EQ(Json::NUL, j.type());
+	EXPECT_EQ(Json::PARSE_OK, j.state());
+}
+
+TEST(ParseNullTest, ParseNull) {
+	Json j = Json::parse("null");
+	EXPECT_EQ(Json::NUL, j.type());
+	EXPECT_EQ(Json::PARSE_OK, j.state());
+}
+
+TEST(ParseExpectValueTest, ParseExpectValue) {
+	Json j = Json::parse("");
+	EXPECT_EQ(Json::NUL, j.type());
+	EXPECT_EQ(Json::PARSE_EXPECT_VALUE, j.state());
+}
+
+TEST(ParseInvalidValueTest, ParseInvalidValue) {
+	Json j = Json::parse("nul");
+	EXPECT_EQ(Json::NUL, j.type());
+	EXPECT_EQ(Json::PARSE_INVALID_VALUE, j.state());
+}
 
 } // namespace
 
@@ -37,12 +66,12 @@ int main(int argc, char **argv)
 	n = j.get_number();		// if j is number	,n is a double
 	s = j.get_string();		// if j is string	,s is a string
 	a = j.get_array();		// if j is array	,a is a vector<Json>
-	a[i];
+	j[0] and a[0];
 	o = j.get_object();		// if j is object	,o is a map<string, Json>
-	o["key"];
+	j["key"] and o["key"];
 
-	j = lljson::parse(str);
-	str = lljson::stringify(j);
+	j = Json::parse(str);
+	str = j.stringify();
 }
 #endif
 
