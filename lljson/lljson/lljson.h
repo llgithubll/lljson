@@ -18,6 +18,7 @@ public:
 		PARSE_OK = 0,
 		PARSE_EXPECT_VALUE,
 		PARSE_INVALID_VALUE,
+		PARSE_NUMBER_TOO_BIG,
 		PARSE_ROOT_NOT_SINGULAR
 	};
 
@@ -41,8 +42,8 @@ public:
 	bool isArray() const;
 	bool isObject() const;
 
-	bool& getBoolean() const;
-	double& getNumber() const;
+	bool getBoolean() const;
+	double getNumber() const;
 	std::string& getString() const;
 	Array& getArray() const;
 	Object& getObject() const;
