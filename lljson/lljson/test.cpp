@@ -14,23 +14,35 @@ TEST(BasicPropertyTest, Null) {
 	EXPECT_EQ(Json::PARSE_OK, j.state());
 }
 
-TEST(BasicPropertyTest, True) {
+TEST(BasicPropertyTest, Boolean) {
 	Json j(true);
 	EXPECT_TRUE(j.isBoolean());
 	EXPECT_EQ(true, j.getBoolean());
 	EXPECT_EQ(Json::PARSE_OK, j.state());
-}
 
-TEST(BasicPropertyTest, False) {
-	Json j(false);
+	j = false;
 	EXPECT_TRUE(j.isBoolean());
 	EXPECT_EQ(false, j.getBoolean());
 	EXPECT_EQ(Json::PARSE_OK, j.state());
 }
 
-TEST(BasicPropertyTest, Number) {
 
+TEST(BasicPropertyTest, Number) {
+	Json j(0.0);
+	EXPECT_TRUE(j.isNumber());
+	EXPECT_DOUBLE_EQ(0.0, j.getNumber());
+	EXPECT_EQ(Json::PARSE_OK, j.state());
 }
+
+TEST(BasicPropertyTest, Copy) {
+	Json j(1.0);
+	EXPECT_TRUE(j.isNumber());
+	j = true;
+	EXPECT_TRUE(j.isBoolean());
+	EXPECT_EQ(true, j.getBoolean());
+	EXPECT_EQ(Json::PARSE_OK, j.state());
+}
+
 
 TEST(ParseNullTest, ParseNull) {
 	Json j = Json::parse("null");
@@ -98,13 +110,32 @@ TEST(ParseNumberTest, ParseNumber) {
 	TEST_NUMBER(-1.7976931348623157e+308, "-1.7976931348623157e+308");
 }
 
+#define TEST_STRING(expect, json)\
+	do {\
+		Json j = Json::parse(json);\
+		EXPECT_EQ(Json::PARSE_OK, j.state());\
+		EXPECT_TRUE(j.isString());\
+	} while(0)
+
+TEST(ParseStringTest, ParseString) {
+	TEST_STRING("", R"("")");
+	TEST_STRING("Hello", "\"Hello\"");
+	TEST_STRING("Hello\nWorld", "\"Hello\\nWorld\"");
+	TEST_STRING("\" \\ / \b \f \n \r \t", "\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"");
+	TEST_STRING("Hello\0World", "\"Hello\\u0000World\"");
+	TEST_STRING("\x24", "\"\\u0024\"");         /* Dollar sign U+0024 */
+	TEST_STRING("\xC2\xA2", "\"\\u00A2\"");     /* Cents sign U+00A2 */
+	TEST_STRING("\xE2\x82\xAC", "\"\\u20AC\""); /* Euro sign U+20AC */
+	TEST_STRING("\xF0\x9D\x84\x9E", "\"\\uD834\\uDD1E\"");  /* G clef sign U+1D11E */
+	TEST_STRING("\xF0\x9D\x84\x9E", "\"\\ud834\\udd1e\"");  /* G clef sign U+1D11E */
+}
+
 #define TEST_ERROR(error, json)\
 	do {\
 		Json j = Json::parse(json);\
 		EXPECT_EQ(Json::NUL, j.type());\
 		EXPECT_EQ(error, j.state());\
-	} while(0)\
-
+	} while(0)
 
 TEST(ParseExpectValueTest, ParseExpectValue) {
 	TEST_ERROR(Json::PARSE_EXPECT_VALUE, "");
@@ -140,7 +171,46 @@ TEST(ParseNumberTooBigTest, ParseNumberTooBig) {
 	TEST_ERROR(Json::PARSE_NUMBER_TOO_BIG, "-1e309");
 }
 
+TEST(ParseMissingQuotationMarkTest, ParseMissingQuotationMark) {
+	TEST_ERROR(Json::PARSE_MISS_QUOTATION_MARK, "\"");
+	TEST_ERROR(Json::PARSE_MISS_QUOTATION_MARK, "\"abc");
+}
 
+TEST(ParseInvalidStringEscapeTest, ParseInvalidStringEscape) {
+	TEST_ERROR(Json::PARSE_INVALID_STRING_ESCAPE, "\"\\v\"");
+	TEST_ERROR(Json::PARSE_INVALID_STRING_ESCAPE, "\"\\'\"");
+	TEST_ERROR(Json::PARSE_INVALID_STRING_ESCAPE, "\"\\0\"");
+	TEST_ERROR(Json::PARSE_INVALID_STRING_ESCAPE, "\"\\x12\"");
+}
+
+TEST(ParseInvalidStringCharTest, ParseInvalidStringChar) {
+	TEST_ERROR(Json::PARSE_INVALID_STRING_CHAR, "\"\x01\"");
+	TEST_ERROR(Json::PARSE_INVALID_STRING_CHAR, "\"\x1F\"");
+}
+
+TEST(ParseInvalidUnicodeHexTest, ParseInvalidUnicodeHex) {
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u0\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u01\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u012\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u/000\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\uG000\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u0/00\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u0G00\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u0/00\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u00G0\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u000/\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u000G\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_HEX, "\"\\u 123\"");
+}
+
+TEST(ParseInvalidUnicodeSurrogateTest, ParseInvalidUnicodeSurrogate) {
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_SURROGATE, "\"\\uDBFF\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\\\\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\uDBFF\"");
+	TEST_ERROR(Json::PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\uE000\"");
+}
 
 
 } // namespace

@@ -24,8 +24,11 @@ private:
 	Json parseNull();
 	Json parseBoolean();
 	Json parseNumber();
+	Json parseString();
+
 	char nextToken();
 	void consumeWhitespace();
+	void encode_utf8(long l, std::string &res);
 };
 
 //========================aux function=========================================
@@ -65,6 +68,7 @@ Json JsonParser::parseValue()
 	case 'n':	return parseNull();
 	case 't':	// down to below
 	case 'f':	return parseBoolean();
+	case '"':	return parseString();
 	default:	return parseNumber();
 	}
 }
@@ -149,6 +153,81 @@ Json JsonParser::parseNumber()
 	return Json(n);
 }
 
+Json JsonParser::parseString()
+{
+	std::string res = "";
+	while (true) {
+		char ch = _parse_string[_i++];
+		switch (ch)
+		{
+		case '"':
+			return Json(res);	//??Json(std::move(res))
+		case '\\':
+			switch (_parse_string[_i++])
+			{
+			case '"':	res += '"'; break;
+			case '\\':	res += '\\'; break;
+			case '/':	res += '/'; break;
+			case 'b':	res += '\b'; break;
+			case 'f':	res += '\f'; break;
+			case 'n':	res += '\n'; break;
+			case 'r':	res += '\r'; break;
+			case 't':	res += '\t'; break;
+			case 'u':	{
+					std::string hex4 = _parse_string.substr(_i, 4);
+					auto is_hex4 = [&](const std::string &hex) {
+						for (size_t j = 0; j < 4; j++) {
+							if (!inRange(hex[j], 'a', 'f')
+								&& !inRange(hex[j], 'A', 'F')
+								&& !inRange(hex[j], '0', '9')) {
+								return false;
+							}
+						}
+						return true;
+					};
+					
+					if (!is_hex4(hex4)) {
+						return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_HEX);
+					}
+					long codepoint = strtol(hex4.c_str(), nullptr, 16);
+					_i += 4;
+					if (inRange(codepoint, 0xD800, 0xDBFF)) { // surrogate pair
+						if (_parse_string[_i++] != '\\') {
+							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_SURROGATE);
+						}
+						if (_parse_string[_i++] != 'u') {
+							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_SURROGATE);
+						}
+						hex4 = _parse_string.substr(_i, 4);
+						if (!is_hex4(hex4)) {
+							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_HEX);
+						}
+						long low = strtol(hex4.c_str(), nullptr, 16);
+						_i += 4;
+						if (!inRange(low, 0xDC00, 0xDFFF)) {
+							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_SURROGATE);
+						}
+						codepoint = (((codepoint - 0xD800) << 10) | (low - 0xDC00)) + 0x10000;
+					}
+					encode_utf8(codepoint, res);
+				}
+				break;
+			default:
+				return Json(Json::NUL, Json::PARSE_INVALID_STRING_ESCAPE);
+			}
+			break;
+		case '\0':
+			return Json(Json::NUL, Json::PARSE_MISS_QUOTATION_MARK);
+		default:
+			if ((unsigned char)ch < 0x20) {
+				return Json(Json::NUL, Json::PARSE_INVALID_STRING_CHAR);
+			}
+			res += ch;
+			break;
+		}
+	}
+}
+
 char JsonParser::nextToken()
 {
 	consumeWhitespace();
@@ -169,6 +248,30 @@ void JsonParser::consumeWhitespace()
 		_i++;
 }
 
+void JsonParser::encode_utf8(long l, std::string & res)
+{
+	if (l < 0) return;
+	if (l < 0x80) {
+		res += static_cast<char>(l & 0xFF);
+	}
+	else if (l < 0x800) {
+		res += static_cast<char>(0xC0 | ((l >> 6) & 0xFF));
+		res += static_cast<char>(0x80 | (l        & 0x3F));
+	}
+	else if (l < 0x10000) {
+		res += static_cast<char>(0xE0 | ((l >> 12) & 0xFF));
+		res += static_cast<char>(0x80 | ((l >>  6) & 0x3F));
+		res += static_cast<char>(0x80 | (l         & 0x3F));
+	}
+	else {
+		assert(l <= 0x10FFFF);
+		res += static_cast<char>(0xF0 | ((l >> 18) & 0xFF));
+		res += static_cast<char>(0x80 | ((l >> 12) & 0x3F));
+		res += static_cast<char>(0x80 | ((l >>  6) & 0x3F));
+		res += static_cast<char>(0x80 | (l         & 0x3F));
+	}
+}
+
 
 //========================Json=================================================
 Json::Json(Json::Type _t, Json::State _s)
@@ -184,6 +287,57 @@ Json::Json(const bool _b)
 Json::Json(const double _n)
 	:_number(_n), _type(Json::NUMBER)
 {
+}
+
+Json::Json(const std::string & _s)
+	:_type(Json::STRING)
+{
+	new(&_string) std::string(_s);
+}
+
+Json::Json(const Json & _j)
+	:_type(_j.type()), _state(_j.state())
+{
+	copyUnion(_j);
+}
+
+Json & Json::operator=(const Json & _j)
+{
+	destroyUnion();
+	copyUnion(_j);
+	_state = _j.state();
+	_type = _j.type();
+	return *this;
+}
+
+Json & Json::operator=(bool _b)
+{
+	destroyUnion();
+	_boolean = _b;
+	_type = Json::BOOLEAN;
+	return *this;
+}
+
+Json & Json::operator=(double _n)
+{
+	destroyUnion();
+	_number = _n;
+	_type = Json::NUMBER;
+	return *this;
+}
+
+Json & Json::operator=(const std::string & _s)
+{
+	destroyUnion();
+	new(&_string) std::string(_s);
+	_type = Json::STRING;
+	return *this;
+}
+
+
+Json::~Json()
+{
+	destroyUnion();
 }
 
 Json::Type Json::type() const
@@ -211,10 +365,51 @@ bool Json::isNumber() const
 	return _type == NUMBER;
 }
 
+bool Json::isString() const
+{
+	return _type == STRING;
+}
+
 Json Json::parse(const std::string & str)
 {
 	JsonParser jp(str);
 	return jp.parse();
+}
+
+void Json::copyUnion(const Json & _j)
+{
+	switch (_j.type())
+	{
+	case Json::NUL:			break;
+	case Json::BOOLEAN:		_boolean = _j._boolean; break;
+	case Json::NUMBER:		_number = _j._number; break;
+	case Json::STRING:		new(&_string) std::string(_j._string); break;
+	default:
+		break;
+	}
+}
+
+void Json::destroyUnion()
+{
+	switch (_type)
+	{
+	case Json::NUL:		
+		break;
+	case Json::BOOLEAN:	
+		break;
+	case Json::NUMBER:	
+		break;
+	case Json::STRING:	
+		using std::string; // can't straight use _string.~std::string();
+		_string.~string();
+		break;
+	case Json::ARRAY:
+		break;
+	case Json::OBJECT:
+		break;
+	default:
+		break;
+	}
 }
 
 
@@ -229,6 +424,12 @@ double Json::getNumber() const
 {
 	assert(this->isNumber());
 	return _number;
+}
+
+const std::string & Json::getString() const
+{
+	assert(this->isString());
+	return _string;
 }
 
 } // namespace lljson

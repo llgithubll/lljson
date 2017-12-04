@@ -19,7 +19,12 @@ public:
 		PARSE_EXPECT_VALUE,
 		PARSE_INVALID_VALUE,
 		PARSE_NUMBER_TOO_BIG,
-		PARSE_ROOT_NOT_SINGULAR
+		PARSE_ROOT_NOT_SINGULAR,
+		PARSE_INVALID_STRING_CHAR,
+		PARSE_MISS_QUOTATION_MARK,
+		PARSE_INVALID_STRING_ESCAPE,
+		PARSE_INVALID_UNICODE_SURROGATE,
+		PARSE_INVALID_UNICODE_HEX
 	};
 
 	typedef std::vector<Json> Array;
@@ -29,8 +34,16 @@ public:
 	Json(const bool _b);
 	Json(const double _n);
 	Json(const std::string &_s);
-	Json(const std::vector<Json> &_a);
-	Json(const std::map<std::string, Json> _o);
+	//Json(const std::vector<Json> &_a);
+	//Json(const std::map<std::string, Json> _o);
+
+	Json(const Json &_j);
+	Json &operator=(const Json &_j);
+	Json &operator=(bool _b);
+	Json &operator=(double _n);
+	Json &operator=(const std::string &_s);
+
+	~Json();
 
 	Json::Type type() const;
 	Json::State state() const;
@@ -39,19 +52,19 @@ public:
 	bool isBoolean() const;
 	bool isNumber() const;
 	bool isString() const;
-	bool isArray() const;
-	bool isObject() const;
+	//bool isArray() const;
+	//bool isObject() const;
 
 	bool getBoolean() const;
 	double getNumber() const;
-	std::string& getString() const;
-	Array& getArray() const;
-	Object& getObject() const;
+	const std::string& getString() const;
+	//Array& getArray() const;
+	//Object& getObject() const;
 
 	// Array
-	Json & operator[](size_t i) const;
+	const Json & operator[](size_t i) const;
 	// Object
-	Json & operator[](const std::string &str) const;
+	const Json & operator[](const std::string &str) const;
 	
 	// Array and Object
 	std::size_t size() const;
@@ -61,11 +74,17 @@ public:
 private:
 	Type _type = NUL;
 	State _state = PARSE_OK;
-	bool _boolean;
-	double _number;
-	std::string _string;
-	Array _array;
-	Object _object;
+	union {
+		bool _boolean;
+		double _number;
+		std::string _string;
+		//Array _array;
+		//Object _object;
+	};
+
+	void copyUnion(const Json &_j);
+	void destroyUnion();
+
 };
 
 
