@@ -24,7 +24,11 @@ public:
 		PARSE_MISS_QUOTATION_MARK,
 		PARSE_INVALID_STRING_ESCAPE,
 		PARSE_INVALID_UNICODE_SURROGATE,
-		PARSE_INVALID_UNICODE_HEX
+		PARSE_INVALID_UNICODE_HEX,
+		PARSE_MISS_COMMA_OR_SQUARE_BRACKET,
+		PARSE_MISS_KEY,
+		PARSE_MISS_COLON,
+		PARSE_MISS_COMMA_OR_CURLY_BRACKET
 	};
 
 	typedef std::vector<Json> Array;
@@ -34,14 +38,18 @@ public:
 	Json(const bool _b);
 	Json(const double _n);
 	Json(const std::string &_s);
-	//Json(const std::vector<Json> &_a);
-	//Json(const std::map<std::string, Json> _o);
-
+	Json(const char *_c);
+	Json(const std::vector<Json> &_a);
+	Json(const std::map<std::string, Json> &_o);
 	Json(const Json &_j);
+
 	Json &operator=(const Json &_j);
 	Json &operator=(bool _b);
 	Json &operator=(double _n);
 	Json &operator=(const std::string &_s);
+	Json &operator=(const char *_c);
+	Json &operator=(const std::vector<Json> &_a);
+	Json &operator=(const std::map<std::string, Json> &_o);
 
 	~Json();
 
@@ -52,14 +60,14 @@ public:
 	bool isBoolean() const;
 	bool isNumber() const;
 	bool isString() const;
-	//bool isArray() const;
-	//bool isObject() const;
+	bool isArray() const;
+	bool isObject() const;
 
 	bool getBoolean() const;
 	double getNumber() const;
 	const std::string& getString() const;
-	//Array& getArray() const;
-	//Object& getObject() const;
+	const Array& getArray() const;
+	const Object& getObject() const;
 
 	// Array
 	const Json & operator[](size_t i) const;
@@ -78,8 +86,8 @@ private:
 		bool _boolean;
 		double _number;
 		std::string _string;
-		//Array _array;
-		//Object _object;
+		Array _array;
+		Object _object;
 	};
 
 	void copyUnion(const Json &_j);

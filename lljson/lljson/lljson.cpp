@@ -25,7 +25,10 @@ private:
 	Json parseBoolean();
 	Json parseNumber();
 	Json parseString();
+	Json parseArray();
+	Json parseObject();
 
+	std::string parseRawString();
 	char nextToken();
 	void consumeWhitespace();
 	void encode_utf8(long l, std::string &res);
@@ -69,6 +72,8 @@ Json JsonParser::parseValue()
 	case 't':	// down to below
 	case 'f':	return parseBoolean();
 	case '"':	return parseString();
+	case '[':	return parseArray();
+	case '{':	return parseObject();
 	default:	return parseNumber();
 	}
 }
@@ -153,7 +158,86 @@ Json JsonParser::parseNumber()
 	return Json(n);
 }
 
+
 Json JsonParser::parseString()
+{
+	std::string res = parseRawString();
+	if (_parse_state != Json::PARSE_OK) {
+		return Json(Json::NUL, _parse_state);
+	}
+	return Json(res);
+}
+
+
+Json JsonParser::parseArray()
+{
+	std::vector<Json> arr;
+	char ch = nextToken();
+	if (ch == ']') return arr;
+
+	while (true) {
+		_i--;
+		Json elem = parseValue();
+		if (elem.state() != Json::PARSE_OK) {
+			return elem;
+		}
+		arr.push_back(elem);
+
+		ch = nextToken();
+		if (ch == ',') {
+			ch = nextToken();
+		}
+		else if (ch == ']') {
+			return arr;
+		}
+		else {
+			return Json(Json::NUL, Json::PARSE_MISS_COMMA_OR_SQUARE_BRACKET);
+		}
+	}
+}
+
+Json JsonParser::parseObject()
+{
+	std::map<std::string, Json> object;
+	char ch = nextToken();
+	if (ch == '}') return object;
+
+	while (true) {
+		if (ch != '"') {
+			return Json(Json::NUL, Json::PARSE_MISS_KEY);
+		}
+
+		std::string key = parseRawString();
+		if (_parse_state != Json::PARSE_OK) {
+			return Json(Json::NUL, _parse_state);
+		}
+		
+		ch = nextToken();
+		if (ch != ':') {
+			return Json(Json::NUL, Json::PARSE_MISS_COLON);
+		}
+		
+		auto value = parseValue();
+		if (_parse_state != Json::PARSE_OK) {
+			return Json(Json::NUL, _parse_state);
+		}
+		object[std::move(key)] = std::move(value);
+
+		ch = nextToken();
+		if (ch == ',') {
+			ch = nextToken();
+		}
+		else if (ch == '}') {
+			break;
+		}
+		else {
+			return Json(Json::NUL, Json::PARSE_MISS_COMMA_OR_CURLY_BRACKET);
+		}
+	}
+	return object;
+}
+
+std::string JsonParser::parseRawString()
 {
 	std::string res = "";
 	while (true) {
@@ -161,7 +245,7 @@ Json JsonParser::parseString()
 		switch (ch)
 		{
 		case '"':
-			return Json(res);	//??Json(std::move(res))
+			return res;	//??Json(std::move(res))
 		case '\\':
 			switch (_parse_string[_i++])
 			{
@@ -187,25 +271,30 @@ Json JsonParser::parseString()
 					};
 					
 					if (!is_hex4(hex4)) {
-						return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_HEX);
+						_parse_state = Json::PARSE_INVALID_UNICODE_HEX;
+						return "";
 					}
 					long codepoint = strtol(hex4.c_str(), nullptr, 16);
 					_i += 4;
 					if (inRange(codepoint, 0xD800, 0xDBFF)) { // surrogate pair
 						if (_parse_string[_i++] != '\\') {
-							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_SURROGATE);
+							_parse_state = Json::PARSE_INVALID_UNICODE_SURROGATE;
+							return "";
 						}
 						if (_parse_string[_i++] != 'u') {
-							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_SURROGATE);
+							_parse_state = Json::PARSE_INVALID_UNICODE_SURROGATE;
+							return "";
 						}
 						hex4 = _parse_string.substr(_i, 4);
 						if (!is_hex4(hex4)) {
-							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_HEX);
+							_parse_state = Json::PARSE_INVALID_UNICODE_HEX;
+							return "";
 						}
 						long low = strtol(hex4.c_str(), nullptr, 16);
 						_i += 4;
 						if (!inRange(low, 0xDC00, 0xDFFF)) {
-							return Json(Json::NUL, Json::PARSE_INVALID_UNICODE_SURROGATE);
+							_parse_state = Json::PARSE_INVALID_UNICODE_SURROGATE;
+							return "";
 						}
 						codepoint = (((codepoint - 0xD800) << 10) | (low - 0xDC00)) + 0x10000;
 					}
@@ -213,14 +302,17 @@ Json JsonParser::parseString()
 				}
 				break;
 			default:
-				return Json(Json::NUL, Json::PARSE_INVALID_STRING_ESCAPE);
+				_parse_state = Json::PARSE_INVALID_STRING_ESCAPE;
+				return "";
 			}
 			break;
 		case '\0':
-			return Json(Json::NUL, Json::PARSE_MISS_QUOTATION_MARK);
+			_parse_state = Json::PARSE_MISS_QUOTATION_MARK;
+			return "";
 		default:
 			if ((unsigned char)ch < 0x20) {
-				return Json(Json::NUL, Json::PARSE_INVALID_STRING_CHAR);
+				_parse_state = Json::PARSE_INVALID_STRING_CHAR;
+				return "";
 			}
 			res += ch;
 			break;
@@ -295,6 +387,24 @@ Json::Json(const std::string & _s)
 	new(&_string) std::string(_s);
 }
 
+Json::Json(const char * _c)
+	:_type(Json::STRING)
+{
+	new(&_string) std::string(_c);
+}
+
+Json::Json(const std::vector<Json>& _a)
+	:_type(Json::ARRAY)
+{
+	new(&_array) std::vector<Json>(_a);
+}
+
+Json::Json(const std::map<std::string, Json> &_o)
+	:_type(Json::OBJECT)
+{
+	new(&_object) std::map<std::string, Json>(_o);
+}
+
 Json::Json(const Json & _j)
 	:_type(_j.type()), _state(_j.state())
 {
@@ -334,6 +444,30 @@ Json & Json::operator=(const std::string & _s)
 	return *this;
 }
 
+Json & Json::operator=(const char * _c)
+{
+	destroyUnion();
+	new(&_string) std::string(_c);
+	_type = Json::STRING;
+	return *this;
+}
+
+Json & Json::operator=(const std::vector<Json>& _a)
+{
+	destroyUnion();
+	new(&_array) std::vector<Json>(_a);
+	_type = Json::ARRAY;
+	return *this;
+}
+
+Json & Json::operator=(const std::map<std::string, Json> &_o)
+{
+	destroyUnion();
+	new(&_object) std::map<std::string, Json>(_o);
+	_type = Json::OBJECT;
+	return *this;
+}
+
 
 Json::~Json()
 {
@@ -370,6 +504,22 @@ bool Json::isString() const
 	return _type == STRING;
 }
 
+bool Json::isArray() const
+{
+	return _type == ARRAY;
+}
+
+bool Json::isObject() const
+{
+	return _type == OBJECT;
+}
+
+std::size_t Json::size() const
+{
+	assert(_type == ARRAY || _type == OBJECT);
+	return (_type == ARRAY) ? _array.size() : _object.size();
+}
+
 Json Json::parse(const std::string & str)
 {
 	JsonParser jp(str);
@@ -384,6 +534,8 @@ void Json::copyUnion(const Json & _j)
 	case Json::BOOLEAN:		_boolean = _j._boolean; break;
 	case Json::NUMBER:		_number = _j._number; break;
 	case Json::STRING:		new(&_string) std::string(_j._string); break;
+	case Json::ARRAY:		new(&_array) std::vector<Json>(_j._array); break;
+	case Json::OBJECT:		new(&_object) std::map<std::string, Json>(_j._object); break;
 	default:
 		break;
 	}
@@ -404,8 +556,12 @@ void Json::destroyUnion()
 		_string.~string();
 		break;
 	case Json::ARRAY:
+		using std::vector;
+		_array.~vector();
 		break;
 	case Json::OBJECT:
+		using std::map;
+		_object.~map();
 		break;
 	default:
 		break;
@@ -430,6 +586,33 @@ const std::string & Json::getString() const
 {
 	assert(this->isString());
 	return _string;
+}
+
+const Json::Array & Json::getArray() const
+{
+	assert(this->isArray());
+	return _array;
+}
+
+const Json::Object & Json::getObject() const
+{
+	assert(this->isObject());
+	return _object;
+}
+
+const Json & Json::operator[](size_t i) const
+{
+	assert(_type == ARRAY && i < _array.size());
+	return _array[i];
+}
+
+const Json & Json::operator[](const std::string & str) const
+{
+	assert(_type == OBJECT);
+	//auto iter = _object.find(str);
+	//return (iter == _object.end() ? Json() : iter->second); // this may return temp variable Json()..., add move later??
+	//return _object[str]; // the same as above ? can not use
+	return _object.at(str); // simple use at, later add exception handler??
 }
 
 } // namespace lljson

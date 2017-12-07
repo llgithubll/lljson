@@ -1,4 +1,5 @@
 #include<iostream>
+#include <map>
 #include<gtest\gtest.h>
 #include "lljson.h"
 
@@ -34,6 +35,67 @@ TEST(BasicPropertyTest, Number) {
 	EXPECT_EQ(Json::PARSE_OK, j.state());
 }
 
+
+TEST(BasicPropertyTest, String) {
+	Json j(string("string"));
+	EXPECT_EQ(Json::STRING, j.type());
+	EXPECT_TRUE(j.isString());
+	EXPECT_STREQ("string", j.getString().c_str());
+	EXPECT_EQ(Json::PARSE_OK, j.state());
+
+	j = "haha";
+	EXPECT_TRUE(j.isString());
+	EXPECT_STREQ("haha", j.getString().c_str());
+}
+
+
+TEST(BasicPropertyTest, Array) {
+	const Json j({ 
+		true,									// 0
+		1.0,									// 1
+		"haha",									// 2
+		Json::Array{2.0, "a\\3"},				// 3
+		Json::Object{{"key","value"}, {"k",3.0}}// 4
+	});
+	EXPECT_TRUE(j.isArray());
+	auto v = j.getArray();
+	EXPECT_TRUE(v[0].isBoolean());
+	EXPECT_EQ(true, v[0].getBoolean());
+	EXPECT_TRUE(j[3].isArray());
+	EXPECT_EQ(2, j[3].size());
+	EXPECT_STREQ("a\\3", j[3][1].getString().c_str());
+	EXPECT_TRUE(j[4].isObject());
+	EXPECT_EQ(2, j[4].size());
+	EXPECT_TRUE(j[4]["key"].isString());
+	EXPECT_TRUE(j[4]["k"].isNumber());
+	EXPECT_DOUBLE_EQ(3.0, j[4]["k"].getNumber());
+}
+
+TEST(BasicPropertyTest, Object) {
+	Json j(Json::Object{
+		{"0", Json()},
+		{"1", false},
+		{"2", 3.0},
+		{"3", "haha"},
+		{"4", Json::Array{Json(5.1), Json("5.2")}},
+		{"5", Json::Object{{"6.1", Json()}}}
+	});
+	EXPECT_TRUE(j.isObject());
+	EXPECT_EQ(6, j.size());
+	auto o = j.getObject();
+	EXPECT_EQ(false, o["1"].getBoolean());
+	EXPECT_TRUE(j["4"].isArray());
+	EXPECT_EQ(2, j["4"].size());
+	EXPECT_TRUE(j["5"].isObject());
+	EXPECT_EQ(1, j["5"].size());
+	auto a = j["4"].getArray();
+	EXPECT_EQ(2, a.size());
+	EXPECT_TRUE(a[1].isString());
+	EXPECT_TRUE(j["4"][1].isString());
+	EXPECT_STREQ("5.2", j["4"][1].getString().c_str());
+	EXPECT_TRUE(j["5"]["6.1"].isNull());
+}
+
 TEST(BasicPropertyTest, Copy) {
 	Json j(1.0);
 	EXPECT_TRUE(j.isNumber());
@@ -41,6 +103,18 @@ TEST(BasicPropertyTest, Copy) {
 	EXPECT_TRUE(j.isBoolean());
 	EXPECT_EQ(true, j.getBoolean());
 	EXPECT_EQ(Json::PARSE_OK, j.state());
+	
+	j = Json::Array{ Json("haha"), Json(1.0) };
+	EXPECT_TRUE(j.isArray());
+	EXPECT_STREQ("haha", j[0].getString().c_str());
+
+	j = "hehe";
+	EXPECT_TRUE(j.isString());
+	EXPECT_STREQ("hehe", j.getString().c_str());
+
+	j = Json::Array{ "1", 1.0, true };
+	EXPECT_TRUE(j.isArray());
+	EXPECT_STREQ("1", j[0].getString().c_str());
 }
 
 
@@ -115,6 +189,7 @@ TEST(ParseNumberTest, ParseNumber) {
 		Json j = Json::parse(json);\
 		EXPECT_EQ(Json::PARSE_OK, j.state());\
 		EXPECT_TRUE(j.isString());\
+		EXPECT_STREQ(expect, j.getString().c_str());\
 	} while(0)
 
 TEST(ParseStringTest, ParseString) {
@@ -129,6 +204,44 @@ TEST(ParseStringTest, ParseString) {
 	TEST_STRING("\xF0\x9D\x84\x9E", "\"\\uD834\\uDD1E\"");  /* G clef sign U+1D11E */
 	TEST_STRING("\xF0\x9D\x84\x9E", "\"\\ud834\\udd1e\"");  /* G clef sign U+1D11E */
 }
+
+
+TEST(ParseArrayTest, ParseArray) {
+	Json j = Json::parse(R"([true, 1.0, "ha\\ha", [2.0, 3.0]])");
+	EXPECT_EQ(Json::PARSE_OK, j.state());
+	EXPECT_EQ(Json::ARRAY, j.type());
+	EXPECT_TRUE(j.isArray());
+	EXPECT_EQ(4, j.size());
+	EXPECT_TRUE(j[3].isArray());
+	EXPECT_EQ(2, j[3].size());
+	EXPECT_STREQ("ha\\ha", j[2].getString().c_str());
+	EXPECT_DOUBLE_EQ(3.0, j[3][1].getNumber());
+}
+
+TEST(ParseObjectTest, ParseObject) {
+	Json j = Json::parse(R"(
+		{
+			"n":null,
+			"f":false,
+			"t":true,
+			"i":123,
+			"s":"abc",
+			"a":[1, 2, 3],
+			"o":{"1":1, "2":2, "3":3}
+		}
+	)");
+	EXPECT_EQ(Json::PARSE_OK, j.state());
+	EXPECT_TRUE(j.isObject());
+	EXPECT_EQ(7, j.size());
+	EXPECT_EQ(true, j["t"].getBoolean());
+	EXPECT_DOUBLE_EQ(123, j["i"].getNumber());
+	EXPECT_STREQ("abc", j["s"].getString().c_str());
+	EXPECT_EQ(3, j["a"].size());
+	EXPECT_DOUBLE_EQ(2, j["a"][1].getNumber());
+	EXPECT_EQ(3, j["o"].size());
+	EXPECT_DOUBLE_EQ(3, j["o"]["3"].getNumber());
+}
+
 
 #define TEST_ERROR(error, json)\
 	do {\
@@ -212,6 +325,35 @@ TEST(ParseInvalidUnicodeSurrogateTest, ParseInvalidUnicodeSurrogate) {
 	TEST_ERROR(Json::PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\uE000\"");
 }
 
+TEST(ParseMissCommaOrSquareBracketTest, ParseMissCommaOrSquareBracket) {
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1");
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1}");
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1 2");
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[[]");
+}
+
+TEST(ParseMissKeyTest, ParseMissKey) {
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{:1,");
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{1:1,");
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{true:1,");
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{false:1,");
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{null:1,");
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{[]:1,");
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{{}:1,");
+	TEST_ERROR(Json::PARSE_MISS_KEY, "{\"a\":1,");
+}
+
+TEST(ParseMissColonTest, ParseMissColon) {
+	TEST_ERROR(Json::PARSE_MISS_COLON, "{\"a\"}");
+	TEST_ERROR(Json::PARSE_MISS_COLON, "{\"a\",\"b\"}");
+}
+
+TEST(ParseMissCommaOrCurlyBracketTest, ParseMissCommaOrCurlyBracket) {
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":1");
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":1]");
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":1 \"b\"");
+	TEST_ERROR(Json::PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":{}");
+}
 
 } // namespace
 
@@ -220,39 +362,4 @@ int main(int argc, char **argv)
 	::testing::InitGoogleTest(&argc, argv);
 	return RUN_ALL_TESTS();
 }
-
-
-
-#if 0
-{
-	// interface design: version 1
-	Json();
-	Json(bool b);
-	Json(double num);
-	Json(string &str);
-	Json(vector<Json> &v);
-	Json(map<string, Json> &m);
-
-	
-	j = Json(...);
-	
-	j.is_null();
-	j.is_boolean();
-	j.is_number();
-	j.is_string();
-	j.is_array();
-	j.is_object();	
-	
-	b = j.get_boolean();	// if j is boolean	,b is a true or false
-	n = j.get_number();		// if j is number	,n is a double
-	s = j.get_string();		// if j is string	,s is a string
-	a = j.get_array();		// if j is array	,a is a vector<Json>
-	j[0] and a[0];
-	o = j.get_object();		// if j is object	,o is a map<string, Json>
-	j["key"] and o["key"];
-
-	j = Json::parse(str);
-	str = j.stringify();
-}
-#endif
 
