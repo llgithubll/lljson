@@ -34,6 +34,18 @@ private:
 	void encode_utf8(long l, std::string &res);
 };
 
+
+class JsonStringify {
+public:
+	JsonStringify(const Json &_j);
+	std::string stringify();
+private:
+	const Json &_json;
+	std::string stringifyString(const std::string &_s);
+
+};
+
+
 //========================aux function=========================================
 static inline bool inRange(long x, long lower, long upper) {
 	return (lower <= x && x <= upper);
@@ -59,7 +71,7 @@ Json JsonParser::parse()
 			return Json(Json::NUL, Json::PARSE_ROOT_NOT_SINGULAR);
 		}
 	}
-	return j;
+	return std::move(j);
 }
 
 Json JsonParser::parseValue()
@@ -376,6 +388,11 @@ Json::Json(const bool _b)
 {
 }
 
+Json::Json(const int _n)
+	:_number(static_cast<double>(_n)), _type(Json::NUMBER)
+{
+}
+
 Json::Json(const double _n)
 	:_number(_n), _type(Json::NUMBER)
 {
@@ -425,6 +442,14 @@ Json & Json::operator=(bool _b)
 	destroyUnion();
 	_boolean = _b;
 	_type = Json::BOOLEAN;
+	return *this;
+}
+
+Json & Json::operator=(int _n)
+{
+	destroyUnion();
+	_number = static_cast<double>(_n);
+	_type = Json::NUMBER;
 	return *this;
 }
 
@@ -526,6 +551,13 @@ Json Json::parse(const std::string & str)
 	return jp.parse();
 }
 
+std::string Json::stringify(const Json & j)
+{
+	JsonStringify js(j);
+	return js.stringify();
+}
+
+
 void Json::copyUnion(const Json & _j)
 {
 	switch (_j.type())
@@ -614,5 +646,89 @@ const Json & Json::operator[](const std::string & str) const
 	//return _object[str]; // the same as above ? can not use
 	return _object.at(str); // simple use at, later add exception handler??
 }
+
+//========================JsonStringify========================================
+JsonStringify::JsonStringify(const Json & _j)
+	:_json(_j)
+{
+}
+
+std::string JsonStringify::stringify()
+{
+	switch (_json.type())
+	{
+		case Json::NUL:
+			return "null";
+		case Json::BOOLEAN:
+			return (_json.getBoolean() == true ? "true" : "false");
+		case Json::NUMBER: {
+				char buf[32];
+				snprintf(buf, sizeof buf, "%.17g", _json.getNumber());
+				return buf;
+			}
+		case Json::STRING:
+			return stringifyString(_json.getString());
+		case Json::ARRAY: {
+				std::string res;
+				res += '[';
+				for (int i = 0; i < _json.size(); i++) {
+					if (i != 0) { res += ','; }
+					res += JsonStringify(_json[i]).stringify();
+				}
+				res += ']';
+				return std::move(res);
+			}
+		case Json::OBJECT: {
+				bool first = true;
+				std::string res;
+				res += '{';
+				const auto &object = _json.getObject();
+				for (const auto &kv : object) {
+					if (!first) { res += ','; }
+					res += stringifyString(kv.first);
+					res += ':';
+					res += JsonStringify(kv.second).stringify();
+					first = false;
+				}
+				res += '}';
+				return std::move(res);
+			}
+		default:
+			break;
+	}
+}
+
+
+std::string JsonStringify::stringifyString(const std::string & _s)
+{
+	std::string res;
+	res += '"';
+	for (int i = 0; i < _s.size(); i++) {
+		const char ch = _s[i];
+		switch (ch)
+		{
+			case '"':	res += R"(\")"; break;
+			case '\\':	res += R"(\\)";	break;
+			case '\b':	res += R"(\b)";	break;
+			case '\f':	res += R"(\f)";	break;
+			case '\n':	res += R"(\n)";	break;
+			case '\r':	res += R"(\r)";	break;
+			case '\t':	res += R"(\t)";	break;
+			default:
+				if (static_cast<uint8_t>(ch) < 0x20) {
+					char buf[8];
+					snprintf(buf, sizeof(buf), "\\u%04X", ch);
+					res += buf;
+				}
+				else {
+					res += ch;
+				}
+				break;
+		}
+	}
+	res += '"';
+	return std::move(res);
+}
+
 
 } // namespace lljson

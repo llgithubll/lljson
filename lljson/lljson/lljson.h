@@ -10,6 +10,7 @@ class JsonParser;
 
 class Json {
 	friend class JsonParser;
+	friend class JsonStringify;
 public:
 	enum Type {
 		NUL, BOOLEAN, NUMBER, STRING, ARRAY, OBJECT
@@ -36,6 +37,7 @@ public:
 
 	Json(Json::Type _t=Json::Type::NUL, Json::State _s=Json::State::PARSE_OK);
 	Json(const bool _b);
+	Json(const int _n);	// receive int value and cast to double
 	Json(const double _n);
 	Json(const std::string &_s);
 	Json(const char *_c);
@@ -45,6 +47,7 @@ public:
 
 	Json &operator=(const Json &_j);
 	Json &operator=(bool _b);
+	Json &operator=(int _n);	// receive int value and cast to double
 	Json &operator=(double _n);
 	Json &operator=(const std::string &_s);
 	Json &operator=(const char *_c);
@@ -78,7 +81,8 @@ public:
 	std::size_t size() const;
 
 	static Json parse(const std::string &str);
-	std::string stringify();
+	// note: stringify will make Json::Object sorted as lexicographical order
+	static std::string stringify(const Json &j);
 private:
 	Type _type = NUL;
 	State _state = PARSE_OK;
@@ -92,7 +96,6 @@ private:
 
 	void copyUnion(const Json &_j);
 	void destroyUnion();
-
 };
 
 
