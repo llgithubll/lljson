@@ -8,7 +8,7 @@
 
 namespace ll {
 
-namespace lljson {
+namespace json {
 
 class JsonParser {
 public:
@@ -732,5 +732,5 @@ std::string JsonStringify::stringifyString(const std::string & _s)
 }
 
 
-} // namespace lljson
+} // namespace json
 } // namespace ll

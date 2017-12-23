@@ -5,7 +5,7 @@
 
 namespace ll {
 
-namespace lljson {
+namespace json {
 
 
 class JsonParser;
@@ -102,5 +102,5 @@ private:
 
 
 
-} // namespace lljson
+} // namespace json
 } // namespace ll
