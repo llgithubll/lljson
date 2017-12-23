@@ -6,6 +6,7 @@
 
 #include <iostream>
 
+namespace ll {
 
 namespace lljson {
 
@@ -732,3 +733,4 @@ std::string JsonStringify::stringifyString(const std::string & _s)
 
 
 } // namespace lljson
+} // namespace ll

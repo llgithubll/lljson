@@ -3,6 +3,8 @@
 #include <vector>
 #include <map>
 
+namespace ll {
+
 namespace lljson {
 
 
@@ -101,3 +103,4 @@ private:
 
 
 } // namespace lljson
+} // namespace ll

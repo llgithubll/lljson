@@ -4,7 +4,7 @@
 #include "lljson.h"
 
 using namespace std;
-using namespace lljson;
+using namespace ll::lljson;
 
 namespace {
 
