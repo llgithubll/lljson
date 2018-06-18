@@ -431,6 +431,9 @@ Json::Json(const Json & _j)
 
 Json & Json::operator=(const Json & _j)
 {
+	if (this == &_j) {
+		return *this;
+	}
 	destroyUnion();
 	copyUnion(_j);
 	_state = _j.state();
@@ -540,6 +543,12 @@ bool Json::isObject() const
 	return _type == OBJECT;
 }
 
+void Json::clearObject()
+{
+	assert(_type == OBJECT);
+	_object.clear();
+}
+
 std::size_t Json::size() const
 {
 	assert(_type == ARRAY || _type == OBJECT);
@@ -639,6 +648,47 @@ const Json & Json::operator[](size_t i) const
 	return _array[i];
 }
 
+Json & Json::operator[](size_t i)
+{
+	assert(_type == ARRAY && i < _array.size());
+	return _array[i];
+}
+
+void Json::pushbackArrayElement(const Json & e)
+{
+	assert(_type == ARRAY);
+	_array.push_back(e);
+}
+
+void Json::popbackArrayElement()
+{
+	assert(_type == ARRAY);
+	_array.pop_back();
+}
+
+size_t Json::insertArrayElement(size_t i, const Json & e)
+{
+	assert(_type == ARRAY && i <= _array.size()); // Note: i can be equal to _array.size()
+	auto iter = _array.begin() + i;
+	_array.insert(iter, e);
+	return i;
+}
+
+size_t Json::eraseArrayElement(size_t i)
+{
+	assert(_type == ARRAY && i < _array.size());
+	auto iter = _array.begin() + i;
+	_array.erase(iter);
+	return i;
+}
+
+void Json::clearArray()
+{
+	assert(_type == ARRAY);
+	_array.clear();
+}
+
+
 const Json & Json::operator[](const std::string & str) const
 {
 	assert(_type == OBJECT);
@@ -646,6 +696,37 @@ const Json & Json::operator[](const std::string & str) const
 	//return (iter == _object.end() ? Json() : iter->second); // this may return temp variable Json()..., add move later??
 	//return _object[str]; // the same as above ? can not use
 	return _object.at(str); // simple use at, later add exception handler??
+}
+
+Json & Json::operator[](const std::string & str)
+{
+	assert(_type == OBJECT);
+	//return _object.at(str); // simple use at, later add exception handler??
+	return _object[str];
+}
+
+Json::ObjectIterator Json::findObjectElement(const std::string & str)
+{
+	assert(_type == OBJECT);
+	return _object.find(str);
+}
+
+Json::ConstObjectIterator Json::findObjectElement(const std::string & str) const
+{
+	assert(_type == OBJECT);
+	return _object.find(str);
+}
+
+Json::ObjectIterator Json::eraseObjectElement(ObjectIterator pos)
+{
+	assert(_type == OBJECT);
+	return _object.erase(pos);
+}
+
+Json::ObjectIterator Json::eraseObjectElement(ConstObjectIterator pos)
+{
+	assert(_type == OBJECT);
+	return _object.erase(pos);
 }
 
 //========================JsonStringify========================================
@@ -731,6 +812,55 @@ std::string JsonStringify::stringifyString(const std::string & _s)
 	return std::move(res);
 }
 
+
+bool operator==(const Json &lhs, const Json &rhs)
+{
+	assert(lhs.state() == Json::PARSE_OK && rhs.state() == Json::PARSE_OK);
+	if (lhs.type() != rhs.type()) {
+		return false;
+	}
+	switch (lhs.type())
+	{
+		case Json::BOOLEAN: return lhs.getBoolean() == rhs.getBoolean();
+		case Json::NUMBER:	return lhs.getNumber() == rhs.getNumber();
+		case Json::STRING:	return lhs.getString() == rhs.getString();
+		case Json::ARRAY:
+			if (lhs.size() != rhs.size()) {
+				return false;
+			}
+			for (int i = 0; i < lhs.size(); i++) {
+				if (lhs[i] != rhs[i]) return false;
+			}
+			return true;
+		case Json::OBJECT: {
+				if (lhs.size() != rhs.size()) {
+					return false;
+				}
+				auto liter = lhs.getObject().cbegin();
+				auto lend = lhs.getObject().cend();
+				auto riter = rhs.getObject().cbegin();
+				for (; liter != lend; ++liter, ++riter) {
+					if (liter->first != riter->first) return false;
+					if (liter->second != riter->second) return false;
+				}
+				return true;
+			}
+		default: // Json::NUL case
+			return true;
+	}
+	return false;
+}
+
+bool operator!=(const Json & lhs, const Json & rhs)
+{
+	return !(lhs == rhs);
+}
+
+std::ostream & operator<<(std::ostream & out, const Json & j)
+{
+	out << Json::stringify(j);
+	return out;
+}
 
 } // namespace json
 } // namespace ll

@@ -53,7 +53,7 @@ TEST(BasicPropertyTest, String) {
 
 
 TEST(BasicPropertyTest, Array) {
-	const Json j({ 
+	Json j({ 
 		true,									// 0
 		1.0,									// 1
 		"haha",									// 2
@@ -64,6 +64,19 @@ TEST(BasicPropertyTest, Array) {
 	auto v = j.getArray();
 	EXPECT_TRUE(v[0].isBoolean());
 	EXPECT_EQ(true, v[0].getBoolean());
+	v[1] = Json(false);
+	EXPECT_EQ(false, v[1].getBoolean());
+	j.pushbackArrayElement(Json(string("end")));
+	EXPECT_EQ(6, j.size());
+	EXPECT_STREQ("end", j[5].getString().c_str());
+	j.popbackArrayElement();
+	EXPECT_EQ(5, j.size());
+	j.insertArrayElement(3, Json(3.0));
+	EXPECT_EQ(6, j.size());
+	EXPECT_DOUBLE_EQ(3.0, j[3].getNumber());
+	j.eraseArrayElement(2);
+	EXPECT_EQ(5, j.size());
+	cout << j << endl;
 	EXPECT_TRUE(j[3].isArray());
 	EXPECT_EQ(2, j[3].size());
 	EXPECT_STREQ("a\\3", j[3][1].getString().c_str());
@@ -72,6 +85,8 @@ TEST(BasicPropertyTest, Array) {
 	EXPECT_TRUE(j[4]["key"].isString());
 	EXPECT_TRUE(j[4]["k"].isNumber());
 	EXPECT_DOUBLE_EQ(3.0, j[4]["k"].getNumber());
+	j.clearArray();
+	EXPECT_EQ(0, j.size());
 }
 
 TEST(BasicPropertyTest, Object) {
@@ -97,6 +112,15 @@ TEST(BasicPropertyTest, Object) {
 	EXPECT_TRUE(j["4"][1].isString());
 	EXPECT_STREQ("5.2", j["4"][1].getString().c_str());
 	EXPECT_TRUE(j["5"]["6.1"].isNull());
+
+	j["6"] = "hehe";
+	auto iter = j.findObjectElement("3");
+	EXPECT_STREQ("haha", (iter->second).getString().c_str());
+	auto next_iter = j.eraseObjectElement(iter);
+	EXPECT_TRUE((next_iter->second).isArray());
+	cout << j << endl;
+	j.clearObject();
+	EXPECT_EQ(0, j.size());
 }
 
 TEST(BasicPropertyTest, Copy) {
@@ -116,8 +140,19 @@ TEST(BasicPropertyTest, Copy) {
 	EXPECT_STREQ("hehe", j.getString().c_str());
 
 	j = Json::Array{ "1", 1.0, true };
+	j = j;
 	EXPECT_TRUE(j.isArray());
 	EXPECT_STREQ("1", j[0].getString().c_str());
+
+	Json j2 = Json::Array{};
+	EXPECT_TRUE(j2.isArray());
+	EXPECT_EQ(0, j2.size());
+	vector<Json> vj;
+	for (int i = 0; i < 1000000; i++) {
+		vj.push_back(Json(i));
+	}
+	j2 = vj;
+	EXPECT_EQ(1000000, j2.size());
 }
 
 
@@ -418,6 +453,42 @@ TEST(StringifyTest, Roundtrip) {
 
 	TEST_ROUNDTRIP("{}");
 	TEST_ROUNDTRIP("{\"a\":[1,2,3],\"f\":false,\"i\":123,\"n\":null,\"o\":{\"1\":1,\"2\":2,\"3\":3},\"s\":\"abc\",\"t\":true}");
+}
+
+#define TEST_EQUAL(json1, json2, equality)\
+	do {\
+		Json j1 = Json::parse(json1);\
+		Json j2 = Json::parse(json2);\
+		EXPECT_EQ(Json::PARSE_OK, j1.state());\
+		EXPECT_EQ(Json::PARSE_OK, j2.state());\
+		EXPECT_EQ(equality, j1 == j2);\
+		EXPECT_EQ(equality, !(j1 != j2));\
+	} while(0)
+
+TEST(EqualTest, Equal) {
+	TEST_EQUAL("true", "false", 0);
+	TEST_EQUAL("true", "true", 1);
+	TEST_EQUAL("false", "false", 1);
+	TEST_EQUAL("null", "null", 1);
+	TEST_EQUAL("null", "0", 0);
+	TEST_EQUAL("123", "123", 1);
+	TEST_EQUAL("123", "456", 0);
+	TEST_EQUAL("\"abc\"", "\"abc\"", 1);
+	TEST_EQUAL("\"abc\"", "\"abcd\"", 0);
+	TEST_EQUAL("[]", "[]", 1);
+	TEST_EQUAL("[]", "null", 0);
+	TEST_EQUAL("[1,2,3]", "[1,2,3]", 1);
+	TEST_EQUAL("[1,2,3]", "[1,2,3,4]", 0);
+	TEST_EQUAL("[[]]", "[[]]", 1);
+	TEST_EQUAL("{}", "{}", 1);
+	TEST_EQUAL("{}", "null", 0);
+	TEST_EQUAL("{}", "[]", 0);
+	TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2}", 1);
+	TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"b\":2,\"a\":1}", 1);
+	TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":3}", 0);
+	TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2,\"c\":3}", 0);
+	TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":{}}}}", 1);
+	TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":[]}}}", 0);
 }
 
 } // namespace

@@ -2,17 +2,20 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <type_traits>
 
 namespace ll {
 
 namespace json {
-
 
 class JsonParser;
 
 class Json {
 	friend class JsonParser;
 	friend class JsonStringify;
+	friend bool operator==(const Json &lhs, const Json &rhs);
+	friend bool operator!=(const Json &lhs, const Json &rhs);
+	friend std::ostream & operator<<(std::ostream &out, const Json &j);
 public:
 	enum Type {
 		NUL, BOOLEAN, NUMBER, STRING, ARRAY, OBJECT
@@ -36,6 +39,8 @@ public:
 
 	typedef std::vector<Json> Array;
 	typedef std::map<std::string, Json> Object;
+	typedef Object::iterator ObjectIterator;
+	typedef Object::const_iterator ConstObjectIterator;
 
 	Json(Json::Type _t=Json::Type::NUL, Json::State _s=Json::State::PARSE_OK);
 	Json(const bool _b);
@@ -74,11 +79,27 @@ public:
 	const Array& getArray() const;
 	const Object& getObject() const;
 
-	// Array
+	// =================Array==================
 	const Json & operator[](size_t i) const;
-	// Object
+	Json & operator[](size_t i);
+	void pushbackArrayElement(const Json &e);
+	void popbackArrayElement();
+	// Insert e to array before i, return new element index
+	size_t insertArrayElement(size_t i, const Json &e);
+	// Erase element at i in array, return next element index
+	size_t eraseArrayElement(size_t i);
+	// Clear all elements in array
+	void clearArray();
+
+	// =================Object=================
 	const Json & operator[](const std::string &str) const;
-	
+	Json & operator[](const std::string &str);
+	ObjectIterator findObjectElement(const std::string &str);
+	ConstObjectIterator findObjectElement(const std::string &str) const;
+	ObjectIterator eraseObjectElement(ObjectIterator pos);
+	ObjectIterator eraseObjectElement(ConstObjectIterator pos);
+	void clearObject();
+
 	// Array and Object
 	std::size_t size() const;
 
